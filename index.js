@@ -1,14 +1,14 @@
+const { ApolloServer } = require('apollo-server-express');
+const { ApolloServerPluginDrainHttpServer } = require('apollo-server-core');
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const http = require('http');
 
 //import typedefs and resolvers
 const TypeDefs = require('./schema')
 const Resolvers = require('./resolvers')
-
-//import ApolloServer
-const { ApolloServer } = require('apollo-server-express')
 
 //Store sensitive information to env variables
 const dotenv = require('dotenv');
@@ -27,22 +27,30 @@ mongoose.connect(mongodb_atlas_url, {
   console.log('Error Mongodb connection')
 });
 
-//Define Apollo Server
-const server = new ApolloServer({
-  typeDefs: TypeDefs.typeDefs,
-  resolvers: Resolvers.resolvers
-})
+const startApolloServer = async (app, httpServer) => {
+  const server = new ApolloServer({
+    typeDefs: TypeDefs.typeDefs,
+    resolvers: Resolvers.resolvers,
+    plugins: [
+      ApolloServerPluginDrainHttpServer({ httpServer })
+    ],
+  });
+  await server.start()
+  server.applyMiddleware({ path:"/graphql",app });
+
+  // httpServer.listen({ port: process.env.PORT }, () =>
+  // console.log(`🚀 Server ready at http://localhost:${process.env.PORT}${server.graphqlPath}`));
+  httpServer.listen({ port: process.env.PORT }, () => {
+    console.log(`🚀 Server ready at ${process.env.VERCEL_URL}/graphql`); 
+  });
+}
 
 //Define Express Server
 const app = express();
 app.use(bodyParser.json());
 app.use('*', cors());
+const httpServer = http.createServer(app);
 
-//Add Express app as middleware to Apollo Server
-server.applyMiddleware({app})
+// Start the Apollo Server
+startApolloServer(app, httpServer);
 
-//console.log(server)
-
-//Start listen 
-app.listen({ port: process.env.PORT }, () =>
-  console.log(`🚀 Server ready at http://localhost:${process.env.PORT}${server.graphqlPath}`));
